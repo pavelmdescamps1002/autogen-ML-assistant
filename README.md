@@ -37,4 +37,6 @@ the application will be saved to a subfolder `myapp' and the AutoGen Studio GUI 
 
 ![Opening JSON editor view](https://github.com/pavelmdescamps1002/autogen-ML-assistant/blob/main/autogen-component-init.png "Opening JSON editor view")
 
+Open the JSON editor view and simply copy-paste the contents of the team-config.json file into the JSON editor. When switching back to visual builder, the team should have appeared and is ready to run!
+
 > Written with [StackEdit](https://stackedit.io/).
