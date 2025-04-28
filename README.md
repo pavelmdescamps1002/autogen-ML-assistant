@@ -35,6 +35,6 @@ the application will be saved to a subfolder `myapp' and the AutoGen Studio GUI 
 
 ## Loading the components
 
-![]()
+![Opening JSON editor view](https://github.com/pavelmdescamps1002/autogen-ML-assistant/blob/main/autogen-component-init.png "Opening JSON editor view")
 
 > Written with [StackEdit](https://stackedit.io/).
