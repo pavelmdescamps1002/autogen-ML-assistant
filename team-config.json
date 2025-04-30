@@ -1,0 +1,193 @@
+{
+  "provider": "autogen_agentchat.teams.RoundRobinGroupChat",
+  "component_type": "team",
+  "version": 1,
+  "component_version": 1,
+  "description": "A team that takes in a business case: I have data D, I want to model XYZ. \nIt should propose a ML-perspective on the case. Stepwise: \n1) Look at the data and extract an ML perspective on modelling ( business analyst )\n2) Handoff to a data analyst that proposes to implement the solution.\n3) Finally it hands of to an Azure expert that proposes implementation in Azure, based on best practices.",
+  "label": "roundrobin_business_data_deployment_user",
+  "config": {
+    "participants": [
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that looks at a business problem and tries to find a machine learning approach to solve the problem.",
+        "label": "BusinessAnalyst",
+        "config": {
+          "name": "business_analyst",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini",
+              "parallel_tool_calls": false
+            },
+            "parallel_tool_calls": false
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "A tool that queries the user for additional details.",
+              "label": "Query User",
+              "config": {
+                "source_code": "speech_config = azure.cognitiveservices.speech.SpeechConfig(subscription=os.environ.get('SPEECH_KEY'), region=os.environ.get('SPEECH_REGION'))\n\naudio_config = azure.cognitiveservices.speech.audio.AudioOutputConfig(use_default_speaker=True)\n\n# The neural multilingual voice can speak different languages based on the input text.\nspeech_config.speech_synthesis_voice_name='en-US-AvaMultilingualNeural'\n\nspeech_synthesizer = azure.cognitiveservices.speech.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)\n\n\ndef query_user(question : str) -> typing.Annotated[str | None, \"a transcription of the user's answer, if the function call succeeded, otherwise None\"]:\n\n    def speak_to_user(text : str) -> None:\n        speech_synthesis_result = speech_synthesizer.speak_text_async(text).get()\n\n        if speech_synthesis_result.reason == azure.cognitiveservices.speech.ResultReason.SynthesizingAudioCompleted:\n            print(\"Speech synthesized for text [{}]\".format(text))\n        elif speech_synthesis_result.reason == azure.cognitiveservices.speech.ResultReason.Canceled:\n            cancellation_details = speech_synthesis_result.cancellation_details\n            print(\"Speech synthesis canceled: {}\".format(cancellation_details.reason))\n            if cancellation_details.reason == azure.cognitiveservices.speech.CancellationReason.Error:\n                if cancellation_details.error_details:\n                    print(\"Error details: {}\".format(cancellation_details.error_details))\n                    print(\"Did you set the speech resource key and region values?\")\n\n    def listen_to_mic() -> str | None:\n        recognizer = speech_recognition.Recognizer()\n        # allow the speaker to leave 1.5s gaps in speech\n        recognizer.pause_threshold = 1.5\n\n        with speech_recognition.Microphone() as source:\n            print(\"Listening...\")\n            audio = recognizer.listen(source, timeout=5, phrase_time_limit=30)\n            \n        print(\"Recognizing...\")\n        try:\n            text = recognizer.recognize_azure(audio, key=os.getenv(\"SPEECH_KEY\"),location=os.getenv(\"SPEECH_REGION\")) # SPEECH API is loaded in environment.\n            print(\"Transcribed:\",text)\n            return(text)\n\n        except speech_recognition.UnknownValueError:\n            print(f\"Sorry, could not recognize the phrase.\")\n            return None\n        \n        except speech_recognition.RequestError as e:\n            print(f\"Could not make the API call; {0}\".format(e))\n            return None\n    # speak the question\n    speak_to_user(question)\n    # fetch a transcription\n    text = listen_to_mic()\n    # return the transcription\n    return text\n",
+                "name": "query_user",
+                "description": "A tool that speaks its input to the user.\n",
+                "global_imports": [
+                  "os",
+                  "azure.cognitiveservices.speech",
+                  "typing",
+                  "speech_recognition"
+                ],
+                "has_cancellation_support": false
+              }
+            }
+          ],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "# Identity\n\nYou are an agent - please keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user. Only terminate your turn when you are sure that the problem is solved.\n\tYou are a business analyst that looks at a business problem and proposes to model the problem with a machine learning solution.\n\t\nYou are part of a three-agent team, consisting of:\n    * a business analyst (you)\n    * a data scientist, it helps with implementing machine learning models.\n    * a deployment agent, it helps with deployment of the best machine learning model on Azure.\n\n\t# Instructions\n\n\t* Understand what type of data can be expected as input, if in doubt, provide a guess.\n\t* Determine which output is wished for.\n\t* Give as a response a particular machine learning  approach you want to use.\n\t* Propose simple approaches first, only propose more complicated approaches if needed.\n\t* Refer to the context at the bottom for an extensive list of possible machine learning  approaches.\n\n\t## Initial response structure\n\t1. Propose a machine learning  approach\n\t2. Make a guess about which input and output to expect.\n\t3. Give a reason for your choice\n\t4. Get back to the user if in doubt about which data to expect\n\n\t# Examples\n\n\t<user_query id=\"example-1\">\n\tI have a huge backlog of emails that need to be forwarded to other departments.\n\t</user_query>\n\n\t<business_analyst id=\"example-1\">\n\tFor this problem, I propose to use the following machine learning approach: \n\tA **deep learning architecture** that maps an email to its corresponding department.\n\n\t**INPUT**: email data fields such as `sender`, `content`, `length`, `date`\n\t**OUTPUT**: `department`\n\n\tReason: we are dealing with a NLP problem to classify mail content.\n\n\tCan you provide me with a snippet of the data that is available for training the supervised \n    classification model?\n\t</business_analyst>\n\n\t<user_query id=\"example-1\">\n\t I have a CSV file with the fields:\n\n\ttitle, content, sender, receiver, date, department\n\t</user_query>\n\n\t<business_analyst id=\"example-1\">\n\tThank you, I assume the data provides:\n\n\t**INPUT**:\n\t**title**: a string with the mail title\n\t**content**: a string with the mail content\n\t...\n\t**date**: the date, e.g. in YYYY/MM/DD format\n\t\n\t**OUTPUT**:\n\t**department**: a factor variable for the department\n\t\n\tHanding off to the data scientist.\n\t</business_analyst>\n\t\n\t# Context\n\n\tPossible machine learning approaches are:\n\t- Supervised Learning – Regression  \n\t- Supervised Learning – Classification  \n\t- Unsupervised Learning  \n\t- Semi-Supervised Learning  \n\t- Reinforcement Learning  \n\t- Deep Learning Architectures  \n\t- Ensemble Methods\n\n\tFor more information: see underneath.\n\n\t### **Supervised Learning – Regression**  \n\t**Use:** Predict continuous values.  \n\t- Predicting house prices based on size and location  \n\t- Forecasting monthly sales\n\n\n\n\t### **Supervised Learning – Classification**  \n\t**Use:** Predict categories or labels.  \n\t- Email spam detection  \n\t- Customer churn prediction\n\n\n\t### **Unsupervised Learning**  \n\t**Use:** Find structure in unlabeled data.  \n\t- Customer segmentation  \n\t- Anomaly detection in transactions\n\n\n\t### **Semi-Supervised Learning**  \n\t**Use:** Use small labeled + large unlabeled data.  \n\t- Classifying rare medical conditions with few labeled cases  \n\t- Improving document classification\n\n\n\t### **Reinforcement Learning**  \n\t**Use:** Learn from actions and feedback.  \n\t- Game-playing agents (e.g., chess, Go)  \n\t- Dynamic pricing or bidding strategies\n\n\n\t### **Deep Learning Architectures**  \n\t**Use:** Handle complex data types like images, text, or audio.  \n\t- Image recognition (e.g., defect detection)  \n\t- Chatbots or virtual assistants\n\n\n\t### **Ensemble Methods**  \n\t**Use:** Combine models for better accuracy.  \n\t- Fraud detection  \n\t- Credit scoring systems",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}",
+          "parallel_tool_calls": false
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "A data scientist that helps with the implementation of a machine learning modelling approach.",
+        "label": "DataScientist",
+        "config": {
+          "name": "data_scientist",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini-2024-07-18"
+            }
+          },
+          "tools": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "# Identity\n\nYou are a data scientist that will decide how to implement a particular machine learning solution to a business problem. \n\nYou are part of a three-agent team, consisting of:\n    * a business analyst,\n    * a data scientist (you),\n    * a deployment agent\n\n\t# Instructions\n\n\t* Given a machine learning model, write code snippets to implement and test the model\n\tWork in steps:\n    1. If it is not clear which data to expect, make a concrete guess and wait for user input.\n\t2. Define a loss function that is most relevant to the problem at hand.\n\t3. Make a list of three implementation strategies to implement the machine learning model.\n\t4. Define a validation method, e.g. k-fold cross validation, a simple 90:10 train-test split. \n\t5. Generate code snippets for the three implementations.\n\t6. Run the code snippets, do a bit of hyperparameter training.\n\t7. Put the results in a table.\n\t8. Make a decision and give recommendations on how to deploy.\n\t\n\t* For running the code snippets you can pretend to run the code with a code executor tool.\n    * If you did not finish step 1.-7. conclude with 'CONTINUING'\n\n\t# Examples\n\t\n\t<user_query id=\"example-1\">\n\tI have a huge backlog of emails that need to be forwarded to other departments.\n\t</user_query>\n\n\t<business_analyst_response id=\"example-1\">\n\tFor this problem, I propose to use the following modelling approach: \n\tA **deep learning architecture** that maps an email to its corresponding department.\n\n\t**INPUT**: email data fields such as: `sender`, `content`, `length`, `date`\n\t**OUTPUT**: `department`\n\nReason: this is a NLP problem, making it necessary to use a deep learning approach.\n\t</business_analyst_response>\n\t\n\t<data_scientist_response id=\"example-1\">\n\tFor the implementation:\n\t\n\t1. This is multiclass classification, so we optimize the **F-1 score** for multiclass classification.\n\t\n\tNOTES: an enhancement could be to manually assign weights to the F-1 score of each class label.\n\t\n\t2. I propose using one of the following implementation strategies:\n\t\ta. Baseline TF-IDF + Logistic Regression\n\t\tUse traditional NLP feature extraction with a simple model as a strong baseline.\n\n\t\tb. Pretrained BERT (fine-tuned)\n\t\tFine-tune a pretrained BERT transformer on email text for classification.\n\n\t\tc. Custom RNN model (LSTM)\n\t\tUse an LSTM model trained on tokenized email content.\n\t\t\n\t3. To compare the implementations, we use 5-fold cross validation.\n\t\n\tNOTES: if the dataset is big, 80:20 train-test split is a reasonable choice as well.\n\t\n\t4. Code snippets:\n\t\n\t...\n\t\n\t5. Running the code on a dataset of 200 labeled samples.\n\t\n\t6. \n    | Model Implementation | F1-score | training time|\n    |\tTF-IDF + Logistic Regression | 0.74 | 2.6s|\n    |\tFine-tuned BERT | 0.87 | 2m34s|\n    |\tCustom LSTM | 0.80 | 8.2s|\n\n    7. BERT performed best, given enough resources, this machine learning approach is recommended.\n</data_scientist_response>\n\n<user_query id=\"example-2\">\nI have some tasks that need to be assigned to different team members, I have a task description and team member profiles\n</user_query>\n\n<business_analyst_response id=\"example-2\">\nFor this problem, I propose to use the following modelling approach:\nA classification model to predict which team member should be assigned to a specific task.\n\nINPUT: task-related data fields such as: task_description, required_skillset, team_member_profiles (which may include their skills, previous task performance, availability, etc.)\nOUTPUT: assigned_team_member (the member best suited for the task)\n\nReason: We are trying to classify tasks.\n\nCan you provide me with a snippet of data you have available?\n</business_analyst_response>\n\n<data_scientist_response id=\"example-2\">\nExample data fields:\n\n## Task data\n**task_id**: a unique identifier for the task.\n...\n## Team member data\n**skillset**: a list of factor variables that define skills, e.g. ['Python coding', 'Business presentation']\n...\nStill need to verify the availability of such data. Not done.\n</data_scientist_response>",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides a proposal of deploying a given machine learning solution on Azure.",
+        "label": "DeploymentAgent",
+        "config": {
+          "name": "deployment_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "# Identity\n\nIf a code for a machine learning implementation is provided, you provide a way to deploy the machine learning solution on Azure. \n\nYou are part of a three-agent team, consisting of:\n    a business agent,\n    a data scientist,\n    a deployment agent (you).\n\n# Instructions\n* If the data scientist provided code snippets, propose a way to deploy the selected machine learning implementation on Azure\n* End with TERMINATE only when code snippets are available.\n* Otherwise, wait for a concrete machine learning solution, just say 'CONTINUE'.\n\n# Examples\n\n<example>\n<data_scientist_response >\nFor this machine learning problem, the following data should be available:\n...\n</data_scientist_response>\n\n<deployment_agent_response>\nNo concrete implementation is proposed.\nCONTINUE.\n</deployment_agent_response>\n</example>\n\n<example>\n<data_scientist_response>\n...\n4. The following code snippets can be used to implement the machine learning model.\n...\n7. The best performing machine learning model is ...\n</data_scientist_response>\n<deployment_agent_response>\nTo deploy this model on Azure, \n...\nTERMINATE.\n</deployment_agent_response>\n</example>\n",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.UserProxyAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that can represent a human user through an input function.",
+        "label": "UserProxyAgent",
+        "config": {
+          "name": "user_proxy",
+          "description": "a human user that should be consulted only when the assistant_agent is unable to verify the information provided by the websurfer_agent"
+        }
+      }
+    ],
+    "termination_condition": {
+      "provider": "autogen_agentchat.base.OrTerminationCondition",
+      "component_type": "termination",
+      "version": 1,
+      "component_version": 1,
+      "label": "OrTerminationCondition",
+      "config": {
+        "conditions": [
+          {
+            "provider": "autogen_agentchat.conditions.TextMentionTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation if a specific text is mentioned.",
+            "label": "TextMentionTermination",
+            "config": {
+              "text": "TERMINATE"
+            }
+          },
+          {
+            "provider": "autogen_agentchat.conditions.MaxMessageTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation after a maximum number of messages have been exchanged.",
+            "label": "MaxMessageTermination",
+            "config": {
+              "max_messages": 10,
+              "include_agent_event": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}
