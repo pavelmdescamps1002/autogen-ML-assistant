@@ -10,14 +10,6 @@ After installing [Miniconda](https://www.anaconda.com/download/success), run in 
     conda env create --file environment.yml
     conda activate autogenv0.4
 
-## Installation (manual)
-Alternatively, if you have Python >= 3.10 installed, running the following should install all necessary dependencies as well.
-
-    pip install -U "autogen-agentchat" "autogen-ext[openai]"
-    pip install -U "autogenstudio"
-    pip install azure-cognitiveservices-speech
-    pip install pyaudio
-
 ## Setting up the environment variables
 The project uses the Microsoft Speech SDK for Python to handle text to speech (TTS) and speech to text (STT) when running the team. It uses gpt-4o-mini as chat completion client with an OpenAI API key. Environment variables can be set using `conda' in a terminal:
 
@@ -37,5 +29,5 @@ the application will be saved to a subfolder `myapp' and the AutoGen Studio GUI 
 
 ![Opening JSON editor view](https://github.com/pavelmdescamps1002/autogen-ML-assistant/blob/main/autogen-component-init.png "Opening JSON editor view")
 
-Simply 
-> Written with [StackEdit](https://stackedit.io/).
+
+Open the JSON editor view and simply copy-paste the contents of the team-config.json file into the JSON editor. When switching back to visual builder, the team should have appeared and is ready to run!
