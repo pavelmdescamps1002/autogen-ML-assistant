@@ -4,11 +4,11 @@ The setup uses Microsoft Speech SDK, so a speech resource needs to be configured
 and click on `Text to speech/Get started with text to speech' .
 
 ##  Installation (conda)
-After installing [Miniconda](https://www.anaconda.com/download/success), run in a terminal:
+After installing [Miniconda](https://www.anaconda.com/download/success), go to the cloned repository and run in a terminal:
 
-    :: create a new environment `autogenv0.4' with all the necessary packages
+    :: create a new environment `autogen' with all the necessary packages
     conda env create --file environment.yml
-    conda activate autogenv0.4
+    conda activate autogen
 
 ## Setting up the environment variables
 The project uses the Microsoft Speech SDK for Python to handle text to speech (TTS) and speech to text (STT) when running the team. It uses gpt-4o-mini as chat completion client with an OpenAI API key. Environment variables can be set using `conda' in a terminal:
@@ -31,3 +31,13 @@ the application will be saved to a subfolder `myapp' and the AutoGen Studio GUI 
 
 
 Open the JSON editor view and simply copy-paste the contents of the team-config.json file into the JSON editor. When switching back to visual builder, the team should have appeared and is ready to run!
+
+You can test the team by pressing the blue Run button. Alternatively, you can go to Playground and use the drop-down menu next to New Session to create a chat that's not deleted afterwards.
+
+# Components
+
+## Listen tool
+
+## Speech tool
+
+## Agent prompts
