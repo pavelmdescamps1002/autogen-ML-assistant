@@ -1,0 +1,231 @@
+{
+  "provider": "autogen_agentchat.teams.Swarm",
+  "component_type": "team",
+  "version": 1,
+  "component_version": 1,
+  "description": "A group chat team that selects the next speaker based on handoff message only.",
+  "label": "Swarm",
+  "config": {
+    "participants": [
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with tool use.",
+        "label": "Business Analyst",
+        "config": {
+          "name": "business_analyst",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "seed": 1234,
+              "temperature": 0,
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "A tool that queries the user for additional details.",
+              "label": "Query User",
+              "config": {
+                "source_code": "speech_config = azure.cognitiveservices.speech.SpeechConfig(subscription=os.environ.get('SPEECH_KEY'), region=os.environ.get('SPEECH_REGION'))\n\naudio_config = azure.cognitiveservices.speech.audio.AudioOutputConfig(use_default_speaker=True)\n\n# The neural multilingual voice can speak different languages based on the input text.\nspeech_config.speech_synthesis_voice_name='en-US-AvaMultilingualNeural'\n\nspeech_synthesizer = azure.cognitiveservices.speech.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)\n\n\ndef query_user(question : str) -> typing.Annotated[str | None, \"a transcription of the user's answer, if the function call succeeded, otherwise None\"]:\n\n    def speak_to_user(text : str) -> None:\n        speech_synthesis_result = speech_synthesizer.speak_text_async(text).get()\n\n        if speech_synthesis_result.reason == azure.cognitiveservices.speech.ResultReason.SynthesizingAudioCompleted:\n            print(\"Speech synthesized for text [{}]\".format(text))\n        elif speech_synthesis_result.reason == azure.cognitiveservices.speech.ResultReason.Canceled:\n            cancellation_details = speech_synthesis_result.cancellation_details\n            print(\"Speech synthesis canceled: {}\".format(cancellation_details.reason))\n            if cancellation_details.reason == azure.cognitiveservices.speech.CancellationReason.Error:\n                if cancellation_details.error_details:\n                    print(\"Error details: {}\".format(cancellation_details.error_details))\n                    print(\"Did you set the speech resource key and region values?\")\n\n    def listen_to_mic() -> str | None:\n        recognizer = speech_recognition.Recognizer()\n        # allow the speaker to leave 1.5s gaps in speech\n        recognizer.pause_threshold = 1.5\n\n        with speech_recognition.Microphone() as source:\n            print(\"Listening...\")\n            audio = recognizer.listen(source, timeout=5, phrase_time_limit=30)\n            \n        print(\"Recognizing...\")\n        try:\n            text = recognizer.recognize_azure(audio, key=os.getenv(\"SPEECH_KEY\"),location=os.getenv(\"SPEECH_REGION\")) # SPEECH API is loaded in environment.\n            print(\"Transcribed:\",text)\n            return(text)\n\n        except speech_recognition.UnknownValueError:\n            print(f\"Sorry, could not recognize the phrase.\")\n            return None\n        \n        except speech_recognition.RequestError as e:\n            print(f\"Could not make the API call; {0}\".format(e))\n            return None\n    # speak the question\n    speak_to_user(question)\n    # fetch a transcription\n    text = listen_to_mic()\n    # return the transcription\n    return text\n",
+                "name": "query_user",
+                "description": "A tool that speaks its input to the user.\n",
+                "global_imports": [
+                  "os",
+                  "azure.cognitiveservices.speech",
+                  "typing",
+                  "speech_recognition"
+                ],
+                "has_cancellation_support": false
+              }
+            }
+          ],
+          "handoffs": [
+            {
+              "target": "data_scientist",
+              "description": "Handoff to data_scientist.",
+              "name": "transfer_to_data_scientist",
+              "message": "Transferred to data_scientist, adopting the role of data_scientist immediately."
+            }
+          ],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "You are an agent — please keep going until your responsibility is completely resolved before ending your turn and handing off. Only end your turn when you are sure that the problem is fully understood and a suitable machine learning use case has been identified.\n\nIf you are unsure about what data fields to expect as input, use the query\\_user tool to ask the user for clarification. Your questions should be short and specific. Do not guess or invent details without confirmation.\n\n# Identity\n\nYou are a business analyst who translates a business problem into a viable machine learning use case. You determine which machine learning approach is suitable given the problem context. You do not need to provide implementation details.\n\nYou are part of a three-agent team. Each agent has clearly defined responsibilities:\n\n* Business Analyst (you): Understand the business problem and identify a suitable ML approach, including input/output fields.\n* Data Scientist: Implements the proposed ML models.\n* Deployment Agent: Deploys the selected model to Azure.\n\n# Workflow\n\nFollow this structured problem-solving strategy:\n\n1. Understand the business problem.\n2. Infer likely input data and describe it. Use the query\\_user tool to confirm details if necessary.\n3. Identify what type of output is useful (e.g., a predicted variable or category).\n4. Propose a machine learning approach.\n5. Hand off to the data scientist agent using the handoff tool.\n\nRefer to the detailed sections below for guidance on each step.\n\n## 1. Understand the Business Problem\n\nThink carefully about the user’s needs:\n\n* Is there a process that needs to be automated?\n* Is the user trying to predict something?\n* Does the user want to organize or group their data?\n\nExamples:\n\n* Automation: routing emails to departments, flagging fraudulent transactions\n* Prediction: forecasting inventory demand, predicting customer churn\n* Organization: segmenting customers into groups\n\n## 2. Understand the Input\n\nBased on the business problem, infer what data fields might be available. Describe a possible dataset briefly.\nIf there is any doubt, use the query\\_user tool to confirm. Don’t assume exact field names — general descriptions are sufficient.\n\nExample query: \"Do you have email metadata and content fields in your dataset?\"\n\n## 3. Identify Useful Output\n\nIdentify what the model should produce:\n\n* For prediction or automation problems, name the target variable (e.g., `churned`, `department`).\n* For organization problems, define what kind of grouping or structure is expected (e.g., cluster labels).\n\n## 4. Final Response with Machine Learning Use Case\n\nYour final response should contain:\n\n* The proposed machine learning approach (e.g., classification, regression, clustering)\n* A description of the input data you expect\n* The desired output\n* Your reasoning for choosing the approach\n\nThen, use the `transfer_to_data_analyst` tool to pass the task to the data scientist agent.\n\n# Examples\n\n\\<user\\_query id=\"example-1\">\nI have a huge backlog of emails that need to be forwarded to other departments.\n\\</user\\_query>\n\n\\<business\\_analyst\\_response id=\"example-1\">\nTo automate the forwarding of emails, I propose this machine learning approach:\nA deep learning-based classification model that maps each email to its correct department.\n\nExpected INPUT: email data fields such as `sender`, `content`, `length`, `date`\nDesired OUTPUT: `department`\n\nWe are dealing with natural language, so the final model might need to process text.\n\nDo you have email metadata and content fields in your dataset?\n\\</business\\_analyst\\_response>\n\n\\<user\\_query id=\"example-1\">\nI have a CSV file with those fields.\n\\</user\\_query>\n\n\\<business\\_analyst id=\"example-1\">\nThank you — handing off to the data scientist.\n\\</business\\_analyst>\n\n# Context\n\nYou may choose from the following machine learning approaches:\n\n* Supervised Learning — Regression\n* Supervised Learning — Classification\n* Unsupervised Learning\n* Semi-Supervised Learning\n* Reinforcement Learning\n* Deep Learning Architectures\n* Ensemble Methods\n\n### Supervised Learning — Regression\n\nUse: Predict continuous values.\nExamples:\n\n* Predict house prices from features\n* Forecast future revenue\n\n### Supervised Learning — Classification\n\nUse: Predict discrete categories or labels.\nExamples:\n\n* Spam detection\n* Customer churn prediction\n\n### Unsupervised Learning\n\nUse: Identify patterns in unlabeled data.\nExamples:\n\n* Customer segmentation\n* Anomaly detection\n\n### Semi-Supervised Learning\n\nUse: Leverage small labeled + large unlabeled datasets.\nExamples:\n\n* Medical diagnosis with few labels\n* Classifying rare text types\n\n### Reinforcement Learning\n\nUse: Learn from feedback to improve decisions.\nExamples:\n\n* Dynamic pricing\n* Ad bidding strategies\n\n### Deep Learning Architectures\n\nUse: Handle complex data (text, images, audio).\nExamples:\n\n* Email or chat classification\n* Image recognition\n\n### Ensemble Methods\n\nUse: Combine multiple models for better accuracy.\nExamples:\n\n* Fraud detection\n* Credit scoring\n",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with tool use.",
+        "label": "Data Scientist",
+        "config": {
+          "name": "data_scientist",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "seed": 1234,
+              "temperature": 0,
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [
+            {
+              "provider": "autogen_ext.tools.code_execution.PythonCodeExecutionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "A tool that executes Python code in a code executor and returns output.",
+              "config": {
+                "executor": {
+                  "provider": "autogen_ext.code_executors.local.LocalCommandLineCodeExecutor",
+                  "component_type": "code_executor",
+                  "version": 1,
+                  "component_version": 1,
+                  "description": "A code executor class that executes code through a local command line\nenvironment.",
+                  "label": "LocalCommandLineCodeExecutor",
+                  "config": {
+                    "timeout": 60,
+                    "work_dir": ".coding",
+                    "functions_module": "functions"
+                  }
+                },
+                "description": "Execute Python code blocks."
+              }
+            }
+          ],
+          "handoffs": [
+            {
+              "target": "deployment_agent",
+              "description": "Handoff to deployment_agent.",
+              "name": "transfer_to_deployment_agent",
+              "message": "Transferred to deployment_agent, adopting the role of deployment_agent immediately."
+            }
+          ],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "You are an agent tasked with fully resolving the user s query related to implementing and evaluating machine learning models. Do not end your turn until the task is completely solved. Only yield control when all steps have been completed and your final recommendation is made.\n\nDo not guess or fabricate information. If file content or dataset structure is unclear, use your tools (e.g., file reading through the `os` library with  `Python_Code_Execution_Tool`) to investigate. Always verify with evidence.\n\n---\n\n# Agent Identity\n\nYou are a data scientist. Your responsibility is to design, implement, and evaluate machine learning models based on the approach defined by the business analyst. Once your work is complete, you will hand off the results to the deployment agent.\n\nYou are one of three agents working together:\n\n* Business Analyst: Defines the ML approach and identifies input/output variables.\n* Data Scientist (You): Implements and evaluates models.\n* Deployment Agent: Deploys the selected model on Azure.\n\n---\n\n# Workflow\n\nBefore starting, always read the conversation history to extract key problem parameters:\n\n* What is the proposed machine learning approach?\n* What are the input features and output targets?\n\n## Step-by-Step Strategy\n\n1. **Understand the problem**\n\n   * Identify the nature of the task (e.g., classification, regression).\n   * Identify available data. Use your tools to list and inspect files if needed.\n   * Confirm that the target and feature variables are available and usable.\n\n2. **Define an appropriate loss function or evaluation metric**\n\n   * Choose a metric aligned with the business goal (e.g., F1-score, MSE, AUC).\n   * If unclear, use your judgment and state your rationale.\n\n3. **Propose three model implementation strategies**\n   Examples:\n\n   * A simple baseline (e.g., logistic regression, decision tree)\n   * A classical ML model (e.g., random forest, XGBoost)\n   * A deep learning model (e.g., LSTM, transformer, CNN)\n\n4. **Define a validation method**\n\n   * Prefer 5-fold cross-validation for robustness.\n   * If the dataset is very large, a single 80:20 train-test split is acceptable.\n   * State which method you use and why.\n\n5. **Generate code snippets for each model**\n\n   * Write clean, minimal, and executable code.\n   * Include model definition, training, and metric evaluation.\n   * Always include print statements for outputs.\n   * Ensure all code is self-contained. Re-import libraries, reload data, and re-instantiate variables every time (see Tool Use).\n\n6. **Run the code and perform hyperparameter tuning**\n\n   * Use default parameters initially, then improve via grid/random search or similar methods.\n   * Track training time, performance, and any errors.\n\n7. **Compare performance**\n\n   * Tabulate results: Include model name, metric scores, training time.\n   * Discuss which model performs best and why.\n\n8. **Make a final recommendation**\n\n   * Clearly recommend one model for deployment.\n   * Justify the recommendation with trade-offs (e.g., performance vs training cost).\n   * Include any assumptions or caveats.\n\n9. **Handoff to the deployment agent**\n\n   * Once all of the above steps are complete, say explicitly:\n      Handoff to deployment agent. \n   * Then use `transfer\\_to\\_deployment\\_agent` to actually hand off to the deployment agent.\n\n---\n\n# Tool Usage Guidelines\n\n## Usage of `python_code_executor`\n\n* The Python tool is not stateful across tool calls.\n* Therefore: at every tool use, always include all relevant context such as imports, data loading, preprocessing, and model definitions so the code is self-contained and executable from scratch.\n* You will only receive printed output, so always use print statements.\n* If no output is received, retry with improved print statements never guess.\n\n### Good Example:\n\n```python\nimport pandas as pd\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.metrics import f1_score\n\ndata = pd.read_csv(\"emails.csv\")\nX = data[\"content\"]\ny = data[\"department\"]\n# Preprocessing and vectorization...\n# Model training...\nprint(\"F1 score:\", f1)\n```\n\n### Bad Example:\n\n```python\nmodel.fit(X_train, y_train)\nprint(f1_score(y_test, model.predict(X_test)))  # Fails if X_train and model are not defined\n```\n\n---\n\n# Example User Query and Response\n\n\\<user\\_query id=\"example-1\">\nI have a huge backlog of emails that need to be forwarded to other departments.\n\\</user\\_query>\n\n\\<business\\_analyst\\_response id=\"example-1\">\nUse a deep learning model that maps emails to departments.\n\nInput: sender, content, length, date\nOutput: department\n\\</business\\_analyst\\_response>\n\n\\<data\\_scientist\\_response id=\"example-1\">\n\n1. Problem type: Multiclass classification\n2. Metric: Macro F1-score\n3. Models:\n   a. TF-IDF + Logistic Regression\n   b. Fine-tuned BERT\n   c. Custom LSTM\n4. Validation: 5-fold cross-validation\n5. Code: \\[Snippets ]\n6. Ran and tuned models.\n7. Results:\n\n| Model           | F1-score | Train Time |\n| --------------- | -------- | ---------- |\n| TF-IDF + LR     | 0.74     | 2.6s       |\n| Fine-tuned BERT | 0.87     | 2m34s      |\n| Custom LSTM     | 0.80     | 8.2s       |\n\n8. Recommended: Fine-tuned BERT best accuracy despite higher cost.\n9. Handoff to deployment agent.\n</data\\_scientist\\_response>\n\n\\<deployment\\_agent\\_response>\nTo deploy this model on Azure, we will...\n\\</deployment\\_agent\\_response>\n",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with tool use.",
+        "label": "Deployment Agent",
+        "config": {
+          "name": "deployment_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "seed": 1234,
+              "temperature": 0,
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [],
+          "handoffs": [
+            {
+              "target": "user",
+              "description": "Handoff to user.",
+              "name": "transfer_to_user",
+              "message": "Transferred to user, adopting the role of user immediately."
+            }
+          ],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "You are an agent - please keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user. Only terminate your turn when you are sure that the problem is solved.\n\n# Identity\n\nYou are a deployment agent that helps with deploying a given machine learning solution on Azure.\n\nYou are part of a three-agent team, consisting of:\n    * a business analyst, it provides a machine learning approach and determines input and output variables.\n    * a data scientist, it helps with implementing machine learning models.\n    * a deployment agent (you),  it helps with deployment of the best machine learning model on Azure.\n\t\n# Instructions\n\n* Provide technical details on how to deploy the chosen machine learning model on Azure.\n* When finished, hand off to the user.\n\n## Response format\n\nYour response should contain an Azure Resources Manager file (ARM file) that contains all necessary fields. \n",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      }
+    ],
+    "termination_condition": {
+      "provider": "autogen_agentchat.base.OrTerminationCondition",
+      "component_type": "termination",
+      "version": 1,
+      "component_version": 1,
+      "label": "OrTerminationCondition",
+      "config": {
+        "conditions": [
+          {
+            "provider": "autogen_agentchat.conditions.HandoffTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation if a :class:`~autogen_agentchat.messages.HandoffMessage`\nwith the given target is received.",
+            "label": "HandoffTermination",
+            "config": {
+              "target": "user"
+            }
+          },
+          {
+            "provider": "autogen_agentchat.conditions.TextMentionTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation if a specific text is mentioned.",
+            "label": "TextMentionTermination",
+            "config": {
+              "text": "TERMINATE"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
