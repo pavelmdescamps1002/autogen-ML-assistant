@@ -27,7 +27,7 @@ the application will be saved to a subfolder `myapp' and the AutoGen Studio GUI 
 
 ## Loading the components
 
-![Opening JSON editor view](https://github.com/pavelmdescamps1002/autogen-ML-assistant/blob/main/autogen-component-init.png "Opening JSON editor view")
+![Opening JSON editor view](autogen-component-init.png "Opening JSON editor view")
 
 
 Open the JSON editor view and simply copy-paste the contents of the team-config.json file into the JSON editor. When switching back to visual builder, the team should have appeared and is ready to run!
@@ -57,3 +57,30 @@ The agent prompts I used are annotated with citations in the files:
 * P1business_analyst.md
 * P1data_scientist.md
 * P0deployment_agent.md
+
+## Adding user-defined tools for quick testing purposes
+
+To add a user-defined tool for quick testing purposes, below is a way to do so in AutoGen Studio UI in <10 minutes, starting to write the mock code right away. 
+
+Example use case:  creating a mock tool that outputs descriptive statistics to check whether the model is correctly using + interpreting tool outputs with different system prompts.
+
+1. Press the `Add Tool` button.
+![Adding user-defined tools](add-tools.png "Adding user-defined tools")
+2. A small form editor appears: 
+![Defining the function](function-def.png "Defining the function")
+It has some fields:
+* Name: give the component a name, this is for you.
+* Description: function description, _actually_ doesn't get sent to the LLM (bug, short experiment below), so paste the tool description in the system prompt instead.
+* Function name: for your own reference, AutoGen will automatically wrap the first function after `def` to make a tool out of it.
+* Source code: fill out source code for the tool to output e.g. some mock output.
+3. Don't forget to press `Save Changes`
+4. Add the tool to an Agent by simply dragging it from the component library.
+![Add the tool to an Assistant](adding-tool-to-agent.png "Adding a user-defined tool to an agent.")
+
+## Small test
+Underneath a way to test whether the LLM gets the tool description -- I guessed it is not. I verified with the JSON editor that the tool description is altered everywhere.
+
+
+![Providing a meaningful tool description](function-description-test0%20(2).png "Providing a meaningful tool description")
+![Double checking the changes apply.](function-description-test0.png "Double checking the changes apply.")
+![That doesn't get picked up by the LLM](function-description-test1.png "That doesn't get picked up by the LLM.")
