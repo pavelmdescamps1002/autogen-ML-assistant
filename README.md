@@ -66,9 +66,7 @@ Example use case:  creating a mock tool that outputs descriptive statistics to c
 
 1. Press the `Add Tool` button.
 ![Adding user-defined tools](add-tools.png "Adding user-defined tools")
-2. A small form editor appears: 
-![Defining the function](function-def.png "Defining the function")
-It has some fields:
+2. A small form editor appears, it has some fields:
 * Name: give the component a name, this is for you.
 * Description: function description, _actually_ doesn't get sent to the LLM (bug, short experiment below), so paste the tool description in the system prompt instead.
 * Function name: for your own reference, AutoGen will automatically wrap the first function after `def` to make a tool out of it.
