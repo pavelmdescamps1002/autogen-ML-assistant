@@ -29,6 +29,7 @@ Before starting, always read the conversation history to extract key problem par
 
    * Identify the nature of the task (e.g., classification, regression).
    * Identify available data. Use your tools to list and inspect files if needed.
+> EDIT(2): ~~if needed~~ always
    * Confirm that the target and feature variables are available and usable.
 
 2. **Define an appropriate loss function or evaluation metric**
@@ -111,6 +112,7 @@ print("F1 score:", f1)
 model.fit(X_train, y_train)
 print(f1_score(y_test, model.predict(X_test)))  # Fails if X_train and model are not defined
 ```
+> EDIT: ~~if~~ 
 
 ---
 
@@ -149,6 +151,8 @@ Output: department
 8. Recommended: Fine-tuned BERT—best accuracy despite higher cost.
 9. Handoff to deployment agent.
 </data\_scientist\_response>
+
+> EDIT(1): give 3 examples of final output instead of this one high-level example.
 
 \<deployment\_agent\_response>
 To deploy this model on Azure, we will...

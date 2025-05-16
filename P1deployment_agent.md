@@ -10,3 +10,5 @@ You are the Deployment Agent in a multi-agent system. Your input is a trained ma
 
 * When your task is complete, end with:
 “[DEPLOYMENT READY]”
+
+> EDIT(3.): provide failure case in a bullet point, then test if the deployment agent picks it up.
